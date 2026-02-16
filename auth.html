@@ -14,17 +14,18 @@
     .muted { color:#6b7280; font-size: 13px; margin-top: 10px; word-break: break-all; }
     .ok { color:#16a34a; font-weight: 700; margin-top: 10px; }
     .err { color:#dc2626; font-weight: 700; margin-top: 10px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2 style="margin:0 0 10px 0;">Авторизация Portals</h2>
-    <div class="muted">Нажми кнопку ниже — бот получит твой <b>tma</b> и сохранит его как Cookie.</div>
+    <div class="muted">Кнопка отправит твой <b>tma</b> в бота. Если строка длинная — отправим её частями.</div>
 
     <button id="send" class="btn btn-primary">✅ Отправить авторизацию в бот</button>
     <button id="close" class="btn btn-secondary">Закрыть</button>
 
-    <div id="info" class="muted"></div>
+    <div id="info" class="muted mono"></div>
     <div id="status"></div>
   </div>
 
@@ -35,13 +36,25 @@
     function setOk(msg){ statusEl.innerHTML = `<div class="ok">${msg}</div>`; }
     function setErr(msg){ statusEl.innerHTML = `<div class="err">${msg}</div>`; }
 
+    function chunkString(str, size) {
+      const chunks = [];
+      for (let i = 0; i < str.length; i += size) chunks.push(str.slice(i, i + size));
+      return chunks;
+    }
+
     try {
       if (!window.Telegram || !Telegram.WebApp) {
         setErr("Открой эту страницу внутри Telegram (через кнопку «Авторизация» в боте).");
       } else {
         Telegram.WebApp.ready();
         const initData = Telegram.WebApp.initData || "";
-        infoEl.textContent = initData ? ("initData: " + initData.slice(0, 60) + "…") : "initData пустой (что-то не так).";
+
+        // Покажем длину и наличие hash/auth_date (важно)
+        const hasHash = initData.includes("hash=");
+        const hasAuthDate = initData.includes("auth_date=");
+        infoEl.textContent =
+          `len=${initData.length} | hash=${hasHash} | auth_date=${hasAuthDate}\n` +
+          (initData ? ("preview: " + initData.slice(0, 120) + " ...") : "initData пустой");
 
         document.getElementById("send").onclick = () => {
           const data = Telegram.WebApp.initData || "";
@@ -49,9 +62,19 @@
             setErr("initData пустой. Открой заново через кнопку «Авторизация» в боте.");
             return;
           }
-          Telegram.WebApp.sendData(data);
-          alert("sendData вызван. Теперь закрой и проверь чат");
-          setOk("Отправлено ✅ Вернись в чат с ботом — он подтвердит сохранение.");
+
+          // 3000 — безопасно ниже лимита
+          const CHUNK = 3000;
+          const parts = chunkString(data, CHUNK);
+          const total = parts.length;
+
+          // шлём "пакеты"
+          for (let i = 0; i < total; i++) {
+            const payload = JSON.stringify({ t: "tma_chunk", i, total, part: parts[i] });
+            Telegram.WebApp.sendData(payload);
+          }
+
+          setOk(`Отправлено ✅ частей: ${total}. Закрой и вернись в чат — бот подтвердит сохранение.`);
         };
 
         document.getElementById("close").onclick = () => Telegram.WebApp.close();
