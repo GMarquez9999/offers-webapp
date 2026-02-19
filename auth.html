@@ -1,74 +1,69 @@
 <!doctype html>
-<html lang="ru">
+<html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MRKT Auth</title>
+<meta charset="utf-8">
+<title>MRKT TOKEN</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <!-- Telegram WebApp SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <style>
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      padding: 24px;
-      background: #f7f7f7;
-    }
-    button {
-      width: 100%;
-      padding: 16px;
-      font-size: 16px;
-      border-radius: 12px;
-      border: none;
-      background: #2AABEE;
-      color: white;
-      cursor: pointer;
-    }
-    .info {
-      margin-top: 16px;
-      font-size: 13px;
-      opacity: 0.7;
-      word-break: break-all;
-    }
-  </style>
+<style>
+body{font-family:sans-serif;padding:25px}
+textarea{width:100%;height:120px;font-size:14px}
+button{padding:10px 14px;margin-top:10px}
+</style>
 </head>
 
 <body>
 
-<h2>MRKT AUTH</h2>
+<h2>Получение токена...</h2>
 
-<button onclick="sendAuth()">Отправить авторизацию</button>
+<div id="status">Жди...</div>
 
-<div class="info" id="status">Загрузка...</div>
+<textarea id="token" readonly></textarea>
+<button onclick="copy()">Скопировать</button>
 
 <script>
-  const tg = window.Telegram?.WebApp;
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
 
-  if (!tg) {
+const initData = tg.initData;
+
+if (!initData) {
     document.getElementById("status").innerText =
-      "❌ Telegram WebApp не найден. Открывай страницу через кнопку бота.";
-  } else {
-    tg.ready();
-    tg.expand();
+        "Открой страницу через кнопку Telegram!";
+    throw new Error("no initData");
+}
 
-    const len = tg.initData ? tg.initData.length : 0;
+// достаём photo_url из initData
+function getPhoto(initData){
+    const params = new URLSearchParams(initData);
+    const user = JSON.parse(params.get("user"));
+    return user.photo_url;
+}
 
-    document.getElementById("status").innerText =
-      "initData length: " + len;
-  }
+fetch("https://api.tgmrkt.io/api/v1/auth", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+        appId: null,
+        data: initData,
+        photo: getPhoto(initData)
+    })
+})
+.then(r=>r.json())
+.then(data=>{
+    document.getElementById("status").innerText = "ГОТОВО";
+    document.getElementById("token").value = data.token;
+})
+.catch(e=>{
+    document.getElementById("status").innerText = "Ошибка";
+});
 
-  function sendAuth() {
-    if (!tg || !tg.initData) {
-      alert("initData пустая — открой через кнопку Telegram.");
-      return;
-    }
-
-    // отправляем initData обратно боту
-    tg.sendData(tg.initData);
-
-    // можно закрыть окно
-    tg.close();
-  }
+function copy(){
+    const t = document.getElementById("token");
+    t.select();
+    document.execCommand("copy");
+}
 </script>
 
 </body>
