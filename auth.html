@@ -4,65 +4,94 @@
 <meta charset="utf-8">
 <title>MRKT TOKEN</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
 <style>
-body{font-family:sans-serif;padding:25px}
-textarea{width:100%;height:120px;font-size:14px}
-button{padding:10px 14px;margin-top:10px}
+  body{font-family:sans-serif;padding:25px}
+  textarea{width:100%;height:120px;font-size:14px}
+  button{padding:10px 14px;margin-top:10px}
+  #status{margin:10px 0}
 </style>
 </head>
-
 <body>
 
 <h2>Получение токена...</h2>
-
 <div id="status">Жди...</div>
 
 <textarea id="token" readonly></textarea>
-<button onclick="copy()">Скопировать</button>
+<button onclick="copyToken()">Скопировать</button>
 
 <script>
-const tg = window.Telegram.WebApp;
+const tg = window.Telegram?.WebApp;
+
+function setStatus(t){ document.getElementById("status").innerText = t; }
+
+if (!tg) {
+  setStatus("Открой страницу через кнопку Telegram (WebApp не найден).");
+  throw new Error("No Telegram.WebApp");
+}
+
 tg.ready();
 tg.expand();
 
 const initData = tg.initData;
-
 if (!initData) {
-    document.getElementById("status").innerText =
-        "Открой страницу через кнопку Telegram!";
-    throw new Error("no initData");
+  setStatus("initData пустая. Открой через кнопку бота внутри Telegram.");
+  throw new Error("No initData");
 }
 
-// достаём photo_url из initData
 function getPhoto(initData){
-    const params = new URLSearchParams(initData);
-    const user = JSON.parse(params.get("user"));
-    return user.photo_url;
+  const params = new URLSearchParams(initData);
+  const userStr = params.get("user");
+  if (!userStr) return null;
+  try {
+    const user = JSON.parse(userStr);
+    return user.photo_url || null;
+  } catch(e) {
+    return null;
+  }
 }
 
-fetch("https://api.tgmrkt.io/api/v1/auth", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-        appId: null,
-        data: initData,
-        photo: getPhoto(initData)
-    })
-})
-.then(r=>r.json())
-.then(data=>{
-    document.getElementById("status").innerText = "ГОТОВО";
-    document.getElementById("token").value = data.token;
-})
-.catch(e=>{
-    document.getElementById("status").innerText = "Ошибка";
-});
+const payload = {
+  appId: null,
+  data: initData,
+  photo: getPhoto(initData)  // можно null, но лучше пусть будет
+};
 
-function copy(){
-    const t = document.getElementById("token");
-    t.select();
-    document.execCommand("copy");
+(async () => {
+  try {
+    const r = await fetch("https://orange-disk-3161.g-marquez94.workers.dev", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch(e) { data = {raw: text}; }
+
+    if (!r.ok) {
+      setStatus("Ошибка HTTP: " + r.status);
+      document.getElementById("token").value = text;
+      return;
+    }
+
+    if (!data.token) {
+      setStatus("Token не пришёл. Ответ ниже:");
+      document.getElementById("token").value = text;
+      return;
+    }
+
+    setStatus("ГОТОВО");
+    document.getElementById("token").value = data.token;
+
+  } catch (e) {
+    setStatus("Ошибка fetch: " + (e?.message || e));
+  }
+})();
+
+function copyToken(){
+  const t = document.getElementById("token");
+  t.select();
+  document.execCommand("copy");
 }
 </script>
 
