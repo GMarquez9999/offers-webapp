@@ -1,86 +1,24 @@
 <!doctype html>
-<html lang="ru">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Авторизация</title>
+  <meta charset="utf-8">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    body { font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif; padding: 18px; }
-    .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; }
-    .btn { width: 100%; padding: 14px 12px; border: 0; border-radius: 12px; font-weight: 700; cursor: pointer; }
-    .btn-primary { background: #2ea6ff; color: #fff; }
-    .btn-secondary { background: #f3f4f6; color: #111827; margin-top: 10px; }
-    .muted { color:#6b7280; font-size: 13px; margin-top: 10px; word-break: break-all; }
-    .ok { color:#16a34a; font-weight: 700; margin-top: 10px; }
-    .err { color:#dc2626; font-weight: 700; margin-top: 10px; }
-  </style>
 </head>
-<body>
-  <div class="card">
-    <h2 style="margin:0 0 10px 0;">Авторизация Portals</h2>
-    <div class="muted">Нажми кнопку ниже — бот получит твой <b>tma</b> и сохранит его.</div>
+<body style="font-family:sans-serif;padding:20px">
 
-    <button id="send" class="btn btn-primary">✅ Отправить авторизацию в бот</button>
-    <button id="close" class="btn btn-secondary">Закрыть</button>
+<h3>MRKT AUTH</h3>
+<button onclick="send()">Отправить авторизацию</button>
 
-    <div id="info" class="muted"></div>
-    <div id="status"></div>
-  </div>
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
 
-  <script>
-    const statusEl = document.getElementById("status");
-    const infoEl = document.getElementById("info");
+function send() {
+    const initData = tg.initData;
+    tg.sendData(initData);
+    tg.close();
+}
+</script>
 
-    function setOk(msg){ statusEl.innerHTML = `<div class="ok">${msg}</div>`; }
-    function setErr(msg){ statusEl.innerHTML = `<div class="err">${msg}</div>`; }
-
-    function chunkString(str, size) {
-      const out = [];
-      for (let i = 0; i < str.length; i += size) out.push(str.slice(i, i + size));
-      return out;
-    }
-
-    try {
-      if (!window.Telegram || !Telegram.WebApp) {
-        setErr("Открой эту страницу внутри Telegram (через кнопку «Авторизация» в боте).");
-      } else {
-        Telegram.WebApp.ready();
-
-        const initData = Telegram.WebApp.initData || "";
-        infoEl.textContent = initData ? ("initData: " + initData.slice(0, 60) + "…") : "initData пустой (что-то не так).";
-
-        document.getElementById("send").onclick = () => {
-          const data = Telegram.WebApp.initData || "";
-          if (!data || data.length < 10) {
-            setErr("initData пустой. Открой заново через кнопку «Авторизация» в боте.");
-            return;
-          }
-
-          // Лимит sendData небольшой → шлём частями
-          const CHUNK = 3500; // безопасный размер
-          const parts = chunkString(data, CHUNK);
-          const total = parts.length;
-
-          // Сигнал начала
-          Telegram.WebApp.sendData(`TMA_BEGIN|${total}`);
-
-          // Чанки
-          for (let i = 0; i < total; i++) {
-            Telegram.WebApp.sendData(`TMA_PART|${i}|${total}|${parts[i]}`);
-          }
-
-          // Сигнал конца
-          Telegram.WebApp.sendData(`TMA_END|${total}`);
-
-          setOk(`Отправлено ✅ частей: ${total}. Вернись в чат с ботом — он подтвердит сохранение.`);
-        };
-
-        document.getElementById("close").onclick = () => Telegram.WebApp.close();
-      }
-    } catch (e) {
-      setErr("Ошибка: " + (e?.message || String(e)));
-    }
-  </script>
 </body>
 </html>
