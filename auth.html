@@ -6,82 +6,114 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   body{font-family:sans-serif;padding:25px}
-  textarea{width:100%;height:120px;font-size:14px}
+  textarea{width:100%;height:180px;font-size:13px}
   button{padding:10px 14px;margin-top:10px}
   #status{margin:10px 0}
+  .small{opacity:.7;font-size:12px;word-break:break-all}
 </style>
 </head>
 <body>
 
 <h2>Получение токена...</h2>
 <div id="status">Жди...</div>
+<div class="small" id="dbg"></div>
 
 <textarea id="token" readonly></textarea>
 <button onclick="copyToken()">Скопировать</button>
 
 <script>
-const tg = window.Telegram?.WebApp;
+const WORKER_URL = "https://orange-disk-3161.g-marquez94.workers.dev";
 
-function setStatus(t){ document.getElementById("status").innerText = t; }
+const tg = window.Telegram?.WebApp;
+const statusEl = document.getElementById("status");
+const dbgEl = document.getElementById("dbg");
+const outEl = document.getElementById("token");
+
+function setStatus(t){ statusEl.innerText = t; }
+function setDbg(t){ dbgEl.innerText = t; }
 
 if (!tg) {
-  setStatus("Открой страницу через кнопку Telegram (WebApp не найден).");
+  setStatus("Открой через кнопку бота внутри Telegram (WebApp не найден).");
   throw new Error("No Telegram.WebApp");
 }
 
 tg.ready();
 tg.expand();
 
-const initData = tg.initData;
-if (!initData) {
-  setStatus("initData пустая. Открой через кнопку бота внутри Telegram.");
+const initData = tg.initData || "";
+if (initData.length < 10) {
+  setStatus("initData пустая. Domain/URL настроены неверно.");
   throw new Error("No initData");
 }
 
-function getPhoto(initData){
-  const params = new URLSearchParams(initData);
-  const userStr = params.get("user");
+// Надёжно достаём photo_url
+function extractPhoto(initData) {
+  const p = new URLSearchParams(initData);
+
+  // user приходит URL-encoded JSON строкой
+  const userStr = p.get("user");
   if (!userStr) return null;
-  try {
-    const user = JSON.parse(userStr);
-    return user.photo_url || null;
-  } catch(e) {
-    return null;
+
+  // URLSearchParams уже декодит, но на всякий случай: если вдруг осталось экранирование
+  let s = userStr;
+  try { s = decodeURIComponent(userStr); } catch(e) {}
+
+  // Иногда decodeURIComponent превращает %25.. в %.. и т.п. — пробуем оба
+  const tries = [s, userStr];
+
+  for (const t of tries) {
+    try {
+      const u = JSON.parse(t);
+      if (u && u.photo_url) return u.photo_url;
+    } catch(e) {}
   }
+  return null;
 }
+
+const photo = extractPhoto(initData);
+
+// дебаг — чтобы ты видел, что реально отправляем
+setDbg("initData len=" + initData.length + " | photo=" + (photo || "NULL"));
 
 const payload = {
   appId: null,
   data: initData,
-  photo: getPhoto(initData)  // можно null, но лучше пусть будет
+  photo: photo   // ВАЖНО: не null. Если null — MRKT часто падает 500
 };
 
 (async () => {
   try {
-    const r = await fetch("https://orange-disk-3161.g-marquez94.workers.dev", {
+    if (!payload.photo) {
+      setStatus("Ошибка: photo_url не найден. MRKT отдаст 500. Проверь, что у Telegram аккаунта есть аватар.");
+      outEl.value = "photo_url = NULL";
+      return;
+    }
+
+    const r = await fetch(WORKER_URL, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify(payload)
     });
 
     const text = await r.text();
-    let data;
-    try { data = JSON.parse(text); } catch(e) { data = {raw: text}; }
 
     if (!r.ok) {
       setStatus("Ошибка HTTP: " + r.status);
-      document.getElementById("token").value = text;
+      outEl.value = text;
       return;
     }
 
+    let data;
+    try { data = JSON.parse(text); } catch(e) { data = {}; }
+
     if (!data.token) {
       setStatus("Token не пришёл. Ответ ниже:");
-      document.getElementById("token").value = text;
+      outEl.value = text;
       return;
     }
 
     setStatus("ГОТОВО");
-    document.getElementById("token").value = data.token;
+    outEl.value = data.token;
 
   } catch (e) {
     setStatus("Ошибка fetch: " + (e?.message || e));
@@ -89,8 +121,7 @@ const payload = {
 })();
 
 function copyToken(){
-  const t = document.getElementById("token");
-  t.select();
+  outEl.select();
   document.execCommand("copy");
 }
 </script>
